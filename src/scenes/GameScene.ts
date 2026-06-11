@@ -5,7 +5,7 @@ import { Bullet } from '../objects/Bullet';
 import { Boss } from '../objects/Boss';
 import { Powerup, PowerupType } from '../objects/Powerup';
 import { CONFIG } from '../config';
-import { calcFleetSpeed, calcFireInterval } from '../utils/gameCalc';
+import { calcFleetSpeed, calcFireInterval, calcEnemyBulletSpeed, calcShooterCount } from '../utils/gameCalc';
 
 interface SceneData {
   wave?: number;
@@ -26,15 +26,19 @@ export class GameScene extends Phaser.Scene {
   private lives: number = CONFIG.PLAYER.LIVES;
   private isBossWave: boolean = false;
   private waveClearing: boolean = false;
-  private multishotActive: boolean = false;
+  private multishotLevel: number = 0;
   private multishotTimer?: Phaser.Time.TimerEvent;
+  private bulletPowerActive: boolean = false;
+  private bulletPowerTimer?: Phaser.Time.TimerEvent;
 
   private fleetDirection: number = 1;
   private enemyFireTimer?: Phaser.Time.TimerEvent;
+  private bossMinionTimer?: Phaser.Time.TimerEvent;
 
   private scoreText!: Phaser.GameObjects.Text;
   private livesText!: Phaser.GameObjects.Text;
-  private powerupText!: Phaser.GameObjects.Text;
+  private multishotText!: Phaser.GameObjects.Text;
+  private powerText!: Phaser.GameObjects.Text;
   private bossHpBarBg?: Phaser.GameObjects.Graphics;
   private bossHpBar?: Phaser.GameObjects.Graphics;
 
@@ -48,7 +52,8 @@ export class GameScene extends Phaser.Scene {
     this.lives = data.lives ?? CONFIG.PLAYER.LIVES;
     this.isBossWave = this.wave % 5 === 0;
     this.waveClearing = false;
-    this.multishotActive = false;
+    this.multishotLevel = 0;
+    this.bulletPowerActive = false;
     this.fleetDirection = 1;
   }
 
@@ -82,7 +87,18 @@ export class GameScene extends Phaser.Scene {
       this.updateEnemyFleet(delta);
       this.checkWaveComplete();
     } else if (this.boss?.active) {
+      this.cleanupOffscreenMinions();
       this.checkWaveComplete();
+    }
+  }
+
+  private cleanupOffscreenMinions(): void {
+    const all = this.enemies.getChildren();
+    for (const e of all) {
+      const enemy = e as Enemy;
+      if (enemy.active && enemy.y > CONFIG.CANVAS.HEIGHT + 20) {
+        enemy.destroy();
+      }
     }
   }
 
@@ -116,18 +132,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private firePlayerBullet(x: number, y: number): void {
-    if (this.multishotActive) {
-      const angles = [-15, 0, 15];
-      for (const angle of angles) {
-        const rad = Phaser.Math.DegToRad(angle);
-        const b = new Bullet(this, x, y, 'up');
-        const baseSpeed = CONFIG.BULLET.PLAYER_SPEED;
-        b.setVelocity(Math.sin(rad) * Math.abs(baseSpeed), baseSpeed * Math.cos(rad));
-        this.playerBullets.add(b);
-      }
-    } else {
+    const angles =
+      this.multishotLevel >= 2
+        ? [-30, -15, 0, 15, 30]
+        : this.multishotLevel === 1
+          ? [-15, 0, 15]
+          : [0];
+    const baseSpeed = CONFIG.BULLET.PLAYER_SPEED;
+    const power = this.bulletPowerActive ? 2 : 1;
+
+    for (const angle of angles) {
+      const rad = Phaser.Math.DegToRad(angle);
       const b = new Bullet(this, x, y, 'up');
+      b.damage = power;
       this.playerBullets.add(b);
+      if (power === 2) b.setScale(2);
+      if (angle === 0) {
+        b.setVelocityY(baseSpeed);
+      } else {
+        b.setVelocity(Math.sin(rad) * Math.abs(baseSpeed), baseSpeed * Math.cos(rad));
+      }
     }
   }
 
@@ -190,15 +214,23 @@ export class GameScene extends Phaser.Scene {
 
   private startEnemyFireTimer(): void {
     const interval = calcFireInterval(this.wave);
+    const bulletSpeed = calcEnemyBulletSpeed(this.wave);
+    const shooterCount = calcShooterCount(this.wave);
     this.enemyFireTimer = this.time.addEvent({
       delay: interval,
       loop: true,
       callback: () => {
         const active = this.enemies.getChildren().filter(e => e.active) as Enemy[];
         if (active.length === 0) return;
-        const shooter = active[Phaser.Math.Between(0, active.length - 1)];
-        const b = new Bullet(this, shooter.x, shooter.y + 12, 'down');
-        this.enemyBullets.add(b);
+        const count = Math.min(shooterCount, active.length);
+        const pool = [...active];
+        for (let i = 0; i < count; i++) {
+          const idx = Phaser.Math.Between(0, pool.length - 1);
+          const shooter = pool.splice(idx, 1)[0];
+          const b = new Bullet(this, shooter.x, shooter.y + 12, 'down');
+          this.enemyBullets.add(b);
+          b.setVelocityY(bulletSpeed);
+        }
       },
     });
   }
@@ -235,10 +267,16 @@ export class GameScene extends Phaser.Scene {
 
   private tryDropPowerup(x: number, y: number): void {
     if (Math.random() < CONFIG.POWERUP.DROP_CHANCE) {
-      const type: PowerupType = Math.random() < 0.5 ? 'multishot' : 'shield';
+      const type = this.pickRandomPowerup();
       const p = new Powerup(this, x, y, type);
       this.powerups.add(p);
+      p.setVelocityY(CONFIG.POWERUP.FALL_SPEED);
     }
+  }
+
+  private pickRandomPowerup(): PowerupType {
+    const pool: PowerupType[] = ['multishot', 'shield', 'heart', 'power'];
+    return pool[Phaser.Math.Between(0, pool.length - 1)];
   }
 
   private onEnemyBulletHitPlayer(
@@ -269,21 +307,31 @@ export class GameScene extends Phaser.Scene {
     powerupObj: Phaser.GameObjects.GameObject
   ): void {
     const p = powerupObj as Powerup;
-    if (p.powerupType === 'multishot') {
-      this.activateMultishot();
-    } else {
-      this.activateShield();
+    switch (p.powerupType) {
+      case 'multishot':
+        this.upgradeMultishot();
+        break;
+      case 'shield':
+        this.activateShield();
+        break;
+      case 'heart':
+        this.gainLife();
+        break;
+      case 'power':
+        this.activateBulletPower();
+        break;
     }
     p.destroy();
   }
 
   // --- Power-ups ---
 
-  private activateMultishot(): void {
-    this.multishotActive = true;
+  private upgradeMultishot(): void {
+    this.multishotLevel = Math.min(this.multishotLevel + 1, CONFIG.POWERUP.MULTISHOT_MAX_LEVEL);
     this.multishotTimer?.remove();
     let remaining = CONFIG.POWERUP.MULTISHOT_DURATION / 1000;
-    this.powerupText.setText(`⚡ MULTI-SHOT ${remaining}s`);
+    const bulletCount = this.multishotLevel * 2 + 1;
+    this.multishotText.setText(`⚡ MULTI x${bulletCount} ${remaining}s`);
 
     this.multishotTimer = this.time.addEvent({
       delay: 1000,
@@ -291,10 +339,10 @@ export class GameScene extends Phaser.Scene {
       callback: () => {
         remaining--;
         if (remaining > 0) {
-          this.powerupText.setText(`⚡ MULTI-SHOT ${remaining}s`);
+          this.multishotText.setText(`⚡ MULTI x${bulletCount} ${remaining}s`);
         } else {
-          this.multishotActive = false;
-          this.powerupText.setText('');
+          this.multishotLevel = 0;
+          this.multishotText.setText('');
         }
       },
     });
@@ -303,17 +351,46 @@ export class GameScene extends Phaser.Scene {
   private activateShield(): void {
     if (this.player.hasShield) return;
     this.player.activateShield();
-    this.powerupText.setText('🛡 SHIELD');
+  }
+
+  private gainLife(): void {
+    if (this.lives < CONFIG.PLAYER.LIVES) {
+      this.lives += 1;
+      this.updateHUD();
+    }
+  }
+
+  private activateBulletPower(): void {
+    this.bulletPowerActive = true;
+    this.bulletPowerTimer?.remove();
+    let remaining = CONFIG.POWERUP.POWER_DURATION / 1000;
+    this.powerText.setText(`+ POWER x2 ${remaining}s`);
+
+    this.bulletPowerTimer = this.time.addEvent({
+      delay: 1000,
+      repeat: CONFIG.POWERUP.POWER_DURATION / 1000 - 1,
+      callback: () => {
+        remaining--;
+        if (remaining > 0) {
+          this.powerText.setText(`+ POWER x2 ${remaining}s`);
+        } else {
+          this.bulletPowerActive = false;
+          this.powerText.setText('');
+        }
+      },
+    });
   }
 
   // --- Boss ---
 
   private spawnBoss(): void {
     this.boss = new Boss(this, this.wave);
+    const bulletSpeed = calcEnemyBulletSpeed(this.wave);
 
     this.boss.on('normalFire', (x: number, y: number) => {
       const b = new Bullet(this, x, y, 'down');
       this.enemyBullets.add(b);
+      b.setVelocityY(bulletSpeed);
     });
 
     this.boss.on('specialFire', (x: number, y: number) => {
@@ -321,11 +398,11 @@ export class GameScene extends Phaser.Scene {
       for (const angle of angles) {
         const rad = Phaser.Math.DegToRad(angle);
         const b = new Bullet(this, x, y, 'down');
-        b.setVelocity(
-          Math.sin(rad) * CONFIG.BULLET.ENEMY_SPEED,
-          Math.cos(rad) * CONFIG.BULLET.ENEMY_SPEED
-        );
         this.enemyBullets.add(b);
+        b.setVelocity(
+          Math.sin(rad) * bulletSpeed,
+          Math.cos(rad) * bulletSpeed
+        );
       }
     });
 
@@ -338,6 +415,22 @@ export class GameScene extends Phaser.Scene {
       undefined,
       this
     );
+
+    this.startBossMinionTimer();
+  }
+
+  private startBossMinionTimer(): void {
+    this.bossMinionTimer = this.time.addEvent({
+      delay: CONFIG.BOSS.MINION_SPAWN_INTERVAL,
+      loop: true,
+      callback: () => {
+        if (!this.boss?.active) return;
+        const x = Phaser.Math.Between(60, CONFIG.CANVAS.WIDTH - 60);
+        const minion = new Enemy(this, x, 50);
+        this.enemies.add(minion);
+        minion.setVelocityY(CONFIG.BOSS.MINION_FALL_SPEED);
+      },
+    });
   }
 
   private createBossHpBar(): void {
@@ -358,13 +451,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onPlayerBulletHitBoss(
-    bulletObj: Phaser.GameObjects.GameObject,
-    _bossObj: Phaser.GameObjects.GameObject
+    _bossObj: Phaser.GameObjects.GameObject,
+    bulletObj: Phaser.GameObjects.GameObject
   ): void {
-    bulletObj.destroy();
-    if (!this.boss) return;
+    if (!this.boss?.active) return;
+    const bullet = bulletObj as Bullet;
+    const damage = bullet.damage ?? 1;
+    bullet.destroy();
 
-    const isDead = this.boss.takeDamage();
+    const isDead = this.boss.takeDamage(damage);
     this.updateBossHpBar();
 
     if (isDead) {
@@ -374,9 +469,12 @@ export class GameScene extends Phaser.Scene {
       const p2 = new Powerup(this, this.boss.x + 20, this.boss.y, 'shield');
       this.powerups.add(p1);
       this.powerups.add(p2);
+      p1.setVelocityY(CONFIG.POWERUP.FALL_SPEED);
+      p2.setVelocityY(CONFIG.POWERUP.FALL_SPEED);
       this.boss.destroy();
       this.bossHpBar?.destroy();
       this.bossHpBarBg?.destroy();
+      this.bossMinionTimer?.remove();
     }
   }
 
@@ -415,7 +513,8 @@ export class GameScene extends Phaser.Scene {
     this.add.text(CONFIG.CANVAS.WIDTH / 2, 8, `WAVE ${this.wave}`, waveStyle).setOrigin(0.5, 0).setDepth(10);
     this.livesText = this.add.text(CONFIG.CANVAS.WIDTH - 8, 8, '♥'.repeat(this.lives), livesStyle).setOrigin(1, 0).setDepth(10);
     this.add.text(CONFIG.CANVAS.WIDTH - 8, CONFIG.CANVAS.HEIGHT - 20, `HI: ${hiScore}`, { fontFamily: 'monospace', fontSize: '12px', color: '#888888' }).setOrigin(1, 0).setDepth(10);
-    this.powerupText = this.add.text(8, CONFIG.CANVAS.HEIGHT - 20, '', { fontFamily: 'monospace', fontSize: '12px', color: '#00ccff' }).setDepth(10);
+    this.multishotText = this.add.text(8, CONFIG.CANVAS.HEIGHT - 35, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffff00' }).setDepth(10);
+    this.powerText = this.add.text(8, CONFIG.CANVAS.HEIGHT - 20, '', { fontFamily: 'monospace', fontSize: '12px', color: '#44ff44' }).setDepth(10);
   }
 
   private updateHUD(): void {

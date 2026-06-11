@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config';
 
-export type PowerupType = 'multishot' | 'shield';
+export type PowerupType = 'multishot' | 'shield' | 'heart' | 'power';
 
 export class Powerup extends Phaser.Physics.Arcade.Sprite {
   public powerupType: PowerupType;
@@ -11,7 +11,6 @@ export class Powerup extends Phaser.Physics.Arcade.Sprite {
     this.powerupType = type;
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setVelocityY(CONFIG.POWERUP.FALL_SPEED);
   }
 
   preUpdate(time: number, delta: number): void {

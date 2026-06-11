@@ -40,17 +40,36 @@ export function createTextures(scene: Phaser.Scene): void {
   bog.generateTexture('boss', 60, 52);
   bog.destroy();
 
-  // 파워업: 멀티샷 (24×24, 하늘색 원)
+  // 파워업: 멀티샷 (24×24, 노란색 원)
   const mpg = scene.add.graphics();
-  mpg.fillStyle(0x00ccff);
+  mpg.fillStyle(0xffff00);
   mpg.fillCircle(12, 12, 12);
   mpg.generateTexture('powerup-multishot', 24, 24);
   mpg.destroy();
 
-  // 파워업: 방어막 (24×24, 금색 원)
+  // 파워업: 방어막 (24×24, 하늘색 원)
   const spg = scene.add.graphics();
-  spg.fillStyle(0xffcc00);
+  spg.fillStyle(0x00ccff);
   spg.fillCircle(12, 12, 12);
   spg.generateTexture('powerup-shield', 24, 24);
   spg.destroy();
+
+  // 파워업: 목숨 (24×24, 빨간색 하트)
+  const hpg = scene.add.graphics();
+  hpg.fillStyle(0xff3355);
+  hpg.fillCircle(8, 9, 5);
+  hpg.fillCircle(16, 9, 5);
+  hpg.fillTriangle(3, 11, 21, 11, 12, 22);
+  hpg.generateTexture('powerup-heart', 24, 24);
+  hpg.destroy();
+
+  // 파워업: 총알 강화 (24×24, 초록색 원)
+  const ppg = scene.add.graphics();
+  ppg.fillStyle(0x44ff44);
+  ppg.fillCircle(12, 12, 12);
+  ppg.fillStyle(0xffffff);
+  ppg.fillRect(11, 6, 2, 12);
+  ppg.fillRect(6, 11, 12, 2);
+  ppg.generateTexture('powerup-power', 24, 24);
+  ppg.destroy();
 }

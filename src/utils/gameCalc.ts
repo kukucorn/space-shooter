@@ -10,3 +10,17 @@ export function calcFireInterval(wave: number): number {
     CONFIG.ENEMY.MIN_FIRE_INTERVAL
   );
 }
+
+export function calcEnemyBulletSpeed(wave: number): number {
+  return Math.min(
+    CONFIG.BULLET.ENEMY_SPEED * Math.pow(CONFIG.BULLET.ENEMY_SPEED_SCALE_PER_WAVE, wave - 1),
+    CONFIG.BULLET.ENEMY_MAX_SPEED
+  );
+}
+
+export function calcShooterCount(wave: number): number {
+  return Math.min(
+    1 + Math.floor((wave - 1) / CONFIG.ENEMY.SHOOTER_INCREASE_EVERY_WAVES),
+    CONFIG.ENEMY.MAX_SHOOTERS
+  );
+}

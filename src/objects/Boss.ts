@@ -6,6 +6,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   public maxHp: number;
   private normalFireTimer!: Phaser.Time.TimerEvent;
   private specialFireTimer!: Phaser.Time.TimerEvent;
+  private moveTween?: Phaser.Tweens.Tween;
 
   constructor(scene: Phaser.Scene, wave: number) {
     super(scene, CONFIG.CANVAS.WIDTH / 2, CONFIG.BOSS.SPAWN_Y, 'boss');
@@ -14,6 +15,15 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setImmovable(true);
+
+    this.moveTween = scene.tweens.add({
+      targets: this,
+      x: { from: CONFIG.BOSS.MOVE_LEFT, to: CONFIG.BOSS.MOVE_RIGHT },
+      duration: CONFIG.BOSS.MOVE_DURATION,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
     this.normalFireTimer = scene.time.addEvent({
       delay: CONFIG.BOSS.NORMAL_FIRE_INTERVAL,
@@ -28,9 +38,17 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
-  takeDamage(): boolean {
-    this.hp -= 1;
-    this.scene.tweens.add({
+  preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    if (this.body) {
+      this.body.position.x = this.x - this.body.halfWidth;
+      this.body.position.y = this.y - this.body.halfHeight;
+    }
+  }
+
+  takeDamage(damage: number = 1): boolean {
+    this.hp -= damage;
+    this.scene?.tweens.add({
       targets: this,
       alpha: 0.3,
       duration: 80,
@@ -40,6 +58,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene?: boolean): void {
+    this.moveTween?.remove();
     this.normalFireTimer?.remove();
     this.specialFireTimer?.remove();
     super.destroy(fromScene);
