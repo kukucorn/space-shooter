@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config';
+import { calcBossNormalFireInterval, calcBossSpecialFireInterval } from '../utils/gameCalc';
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
   public hp: number;
@@ -26,13 +27,13 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     });
 
     this.normalFireTimer = scene.time.addEvent({
-      delay: CONFIG.BOSS.NORMAL_FIRE_INTERVAL,
+      delay: calcBossNormalFireInterval(wave),
       loop: true,
       callback: () => this.emit('normalFire', this.x, this.y + 30),
     });
 
     this.specialFireTimer = scene.time.addEvent({
-      delay: CONFIG.BOSS.SPECIAL_FIRE_INTERVAL,
+      delay: calcBossSpecialFireInterval(wave),
       loop: true,
       callback: () => this.emit('specialFire', this.x, this.y + 30),
     });

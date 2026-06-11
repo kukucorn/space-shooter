@@ -24,3 +24,17 @@ export function calcShooterCount(wave: number): number {
     CONFIG.ENEMY.MAX_SHOOTERS
   );
 }
+
+export function calcBossNormalFireInterval(wave: number): number {
+  return Math.max(
+    CONFIG.BOSS.NORMAL_FIRE_INTERVAL - CONFIG.BOSS.NORMAL_FIRE_REDUCTION_PER_WAVE * Math.max(0, wave - 5),
+    CONFIG.BOSS.MIN_NORMAL_FIRE_INTERVAL
+  );
+}
+
+export function calcBossSpecialFireInterval(wave: number): number {
+  return Math.max(
+    CONFIG.BOSS.SPECIAL_FIRE_INTERVAL - CONFIG.BOSS.SPECIAL_FIRE_REDUCTION_PER_WAVE * Math.max(0, wave - 5),
+    CONFIG.BOSS.MIN_SPECIAL_FIRE_INTERVAL
+  );
+}
