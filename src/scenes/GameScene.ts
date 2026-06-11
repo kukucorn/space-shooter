@@ -143,9 +143,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private firePlayerBullet(x: number, y: number): void {
+  private getEffectiveMultishotLevel(): number {
     const baseLevel = this.permanentUpgrades.multishot ? 1 : 0;
-    const effectiveLevel = Math.max(baseLevel, this.multishotLevel);
+    return Math.min(baseLevel + this.multishotLevel, CONFIG.POWERUP.MULTISHOT_MAX_LEVEL);
+  }
+
+  private firePlayerBullet(x: number, y: number): void {
+    const effectiveLevel = this.getEffectiveMultishotLevel();
     const angles =
       effectiveLevel >= 2
         ? [-30, -15, 0, 15, 30]
@@ -351,7 +355,7 @@ export class GameScene extends Phaser.Scene {
     this.multishotLevel = Math.min(this.multishotLevel + 1, CONFIG.POWERUP.MULTISHOT_MAX_LEVEL);
     this.multishotTimer?.remove();
     let remaining = CONFIG.POWERUP.MULTISHOT_DURATION / 1000;
-    const bulletCount = this.multishotLevel * 2 + 1;
+    const bulletCount = this.getEffectiveMultishotLevel() * 2 + 1;
     this.multishotText.setText(`⚡ MULTI x${bulletCount} ${remaining}s`);
 
     this.multishotTimer = this.time.addEvent({
