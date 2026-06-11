@@ -24,7 +24,7 @@ export const CONFIG = {
     ENEMY_MAX_SPEED: 500,
   },
   BOSS: {
-    HP_PER_WAVE: 40,
+    HP_PER_WAVE: 20,
     NORMAL_FIRE_INTERVAL: 1500,
     SPECIAL_FIRE_INTERVAL: 5000,
     SPAWN_Y: 80,

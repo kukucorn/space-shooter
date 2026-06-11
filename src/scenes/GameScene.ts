@@ -465,16 +465,11 @@ export class GameScene extends Phaser.Scene {
     if (isDead) {
       this.score += CONFIG.SCORE.BOSS;
       this.updateHUD();
-      const p1 = new Powerup(this, this.boss.x - 20, this.boss.y, 'multishot');
-      const p2 = new Powerup(this, this.boss.x + 20, this.boss.y, 'shield');
-      this.powerups.add(p1);
-      this.powerups.add(p2);
-      p1.setVelocityY(CONFIG.POWERUP.FALL_SPEED);
-      p2.setVelocityY(CONFIG.POWERUP.FALL_SPEED);
       this.boss.destroy();
       this.bossHpBar?.destroy();
       this.bossHpBarBg?.destroy();
       this.bossMinionTimer?.remove();
+      this.triggerVictory();
     }
   }
 
@@ -527,9 +522,24 @@ export class GameScene extends Phaser.Scene {
   private triggerGameOver(): void {
     this.waveClearing = true;
     this.enemyFireTimer?.remove();
+    this.bossMinionTimer?.remove();
     this.player.setActive(false).setVisible(false);
     this.time.delayedCall(500, () => {
       this.scene.start('GameOverScene', { wave: this.wave, score: this.score });
+    });
+  }
+
+  private triggerVictory(): void {
+    this.waveClearing = true;
+    this.enemyFireTimer?.remove();
+    this.bossMinionTimer?.remove();
+    this.player.setActive(false).setVisible(false);
+    this.time.delayedCall(800, () => {
+      this.scene.start('GameOverScene', {
+        wave: this.wave,
+        score: this.score,
+        victory: true,
+      });
     });
   }
 }
