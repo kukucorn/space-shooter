@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
+import { PermanentUpgrades } from './GameScene';
 
 interface WaveData {
   wave: number;
   score: number;
   bonus: number;
   lives: number;
+  upgrades?: PermanentUpgrades;
 }
 
 export class WaveCompleteScene extends Phaser.Scene {
@@ -19,7 +21,7 @@ export class WaveCompleteScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { wave, score, bonus, lives } = this.waveData;
+    const { wave, score, bonus, lives, upgrades } = this.waveData;
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
 
@@ -44,7 +46,7 @@ export class WaveCompleteScene extends Phaser.Scene {
         if (count > 0) {
           countdownText.setText(`NEXT WAVE IN ${count}...`);
         } else {
-          this.scene.start('GameScene', { wave: wave + 1, score, lives });
+          this.scene.start('GameScene', { wave: wave + 1, score, lives, upgrades });
         }
       },
     });

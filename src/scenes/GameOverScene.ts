@@ -3,7 +3,6 @@ import Phaser from 'phaser';
 interface GameOverData {
   wave: number;
   score: number;
-  victory?: boolean;
 }
 
 export class GameOverScene extends Phaser.Scene {
@@ -21,13 +20,12 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { wave, score, victory } = this.data.get('gameData') as GameOverData;
+    const { wave, score } = this.data.get('gameData') as GameOverData;
     const isNewHi = this.data.get('isNewHi') as boolean;
     const cx = this.scale.width / 2;
 
-    this.add.text(cx, 180, victory ? 'VICTORY!' : 'GAME OVER', {
-      fontFamily: 'monospace', fontSize: '36px',
-      color: victory ? '#ffff00' : '#ff4444',
+    this.add.text(cx, 180, 'GAME OVER', {
+      fontFamily: 'monospace', fontSize: '36px', color: '#ff4444',
     }).setOrigin(0.5);
 
     this.add.text(cx, 250, `SCORE: ${score}`, {

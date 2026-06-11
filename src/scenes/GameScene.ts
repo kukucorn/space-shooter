@@ -7,10 +7,17 @@ import { Powerup, PowerupType } from '../objects/Powerup';
 import { CONFIG } from '../config';
 import { calcFleetSpeed, calcFireInterval, calcEnemyBulletSpeed, calcShooterCount } from '../utils/gameCalc';
 
+export interface PermanentUpgrades {
+  multishot: boolean;
+  power: boolean;
+  shield: boolean;
+}
+
 interface SceneData {
   wave?: number;
   score?: number;
   lives?: number;
+  upgrades?: PermanentUpgrades;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -30,6 +37,7 @@ export class GameScene extends Phaser.Scene {
   private multishotTimer?: Phaser.Time.TimerEvent;
   private bulletPowerActive: boolean = false;
   private bulletPowerTimer?: Phaser.Time.TimerEvent;
+  private permanentUpgrades: PermanentUpgrades = { multishot: false, power: false, shield: false };
 
   private fleetDirection: number = 1;
   private enemyFireTimer?: Phaser.Time.TimerEvent;
@@ -55,6 +63,7 @@ export class GameScene extends Phaser.Scene {
     this.multishotLevel = 0;
     this.bulletPowerActive = false;
     this.fleetDirection = 1;
+    this.permanentUpgrades = data.upgrades ?? { multishot: false, power: false, shield: false };
   }
 
   create(): void {
@@ -129,17 +138,22 @@ export class GameScene extends Phaser.Scene {
   private createPlayer(): void {
     this.player = new Player(this);
     this.player.on('fire', (x: number, y: number) => this.firePlayerBullet(x, y));
+    if (this.permanentUpgrades.shield) {
+      this.player.activateShield();
+    }
   }
 
   private firePlayerBullet(x: number, y: number): void {
+    const baseLevel = this.permanentUpgrades.multishot ? 1 : 0;
+    const effectiveLevel = Math.max(baseLevel, this.multishotLevel);
     const angles =
-      this.multishotLevel >= 2
+      effectiveLevel >= 2
         ? [-30, -15, 0, 15, 30]
-        : this.multishotLevel === 1
+        : effectiveLevel === 1
           ? [-15, 0, 15]
           : [0];
     const baseSpeed = CONFIG.BULLET.PLAYER_SPEED;
-    const power = this.bulletPowerActive ? 2 : 1;
+    const power = (this.bulletPowerActive || this.permanentUpgrades.power) ? 2 : 1;
 
     for (const angle of angles) {
       const rad = Phaser.Math.DegToRad(angle);
@@ -289,6 +303,13 @@ export class GameScene extends Phaser.Scene {
 
     if (this.player.hasShield) {
       this.player.consumeShield();
+      if (this.permanentUpgrades.shield) {
+        this.time.delayedCall(3000, () => {
+          if (this.player.active && !this.player.hasShield) {
+            this.player.activateShield();
+          }
+        });
+      }
       return;
     }
 
@@ -464,12 +485,14 @@ export class GameScene extends Phaser.Scene {
 
     if (isDead) {
       this.score += CONFIG.SCORE.BOSS;
+      const waveBonus = this.wave * CONFIG.SCORE.WAVE_BONUS_MULTIPLIER;
+      this.score += waveBonus;
       this.updateHUD();
       this.boss.destroy();
       this.bossHpBar?.destroy();
       this.bossHpBarBg?.destroy();
       this.bossMinionTimer?.remove();
-      this.triggerVictory();
+      this.triggerBossUpgrade();
     }
   }
 
@@ -491,6 +514,7 @@ export class GameScene extends Phaser.Scene {
           score: this.score,
           bonus,
           lives: this.lives,
+          upgrades: this.permanentUpgrades,
         });
       });
     }
@@ -529,16 +553,17 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private triggerVictory(): void {
+  private triggerBossUpgrade(): void {
     this.waveClearing = true;
     this.enemyFireTimer?.remove();
     this.bossMinionTimer?.remove();
     this.player.setActive(false).setVisible(false);
     this.time.delayedCall(800, () => {
-      this.scene.start('GameOverScene', {
+      this.scene.start('UpgradeChoiceScene', {
         wave: this.wave,
         score: this.score,
-        victory: true,
+        lives: this.lives,
+        upgrades: this.permanentUpgrades,
       });
     });
   }
